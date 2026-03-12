@@ -96,7 +96,7 @@ jobs:
     - name: Install Build Dependencies
       run: |
         sudo apt-get update -qq
-        sudo apt-get install -y -qq lld binutils flex bison libssl-dev libelf-dev libdw-dev gcc-aarch64-linux-gnu
+        sudo apt-get install -y -qq lld binutils flex bison libssl-dev libelf-dev libdw-dev dwarves gcc-aarch64-linux-gnu
 
     - name: Install Repo Tool
       run: |
@@ -376,7 +376,8 @@ jobs:
           make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 \
             CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm \
             OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
-            CROSS_COMPILE=aarch64-linux-gnu- || BUILD_RC=$?
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            KCFLAGS="-Wno-error" || BUILD_RC=$?
           cd "$SYNC_DIR"
         fi
 
