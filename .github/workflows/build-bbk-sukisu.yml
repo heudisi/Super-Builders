@@ -356,7 +356,7 @@ jobs:
         fi
 
         # Bazel first (sm8650+), then OEM script, then direct make
-        if [ -n "$CPUD" ] && [ -f "kernel_platform/build_with_bazel.py" ]; then
+        if [ -n "$CPUD" ] && [ -f "kernel_platform/build_with_bazel.py" ] && [ -f "kernel_platform/build.config" ]; then
           cd kernel_platform
           python3 build_with_bazel.py -t "$CPUD" "$BUILD_METHOD" || BUILD_RC=$?
           cd ..
