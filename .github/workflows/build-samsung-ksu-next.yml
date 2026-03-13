@@ -265,6 +265,15 @@ jobs:
           bash "$FIX_SCRIPT" "$KERNEL_COMMON" "$SUBLEVEL"
         fi
 
+    - name: Apply Samsung Fix Patches (Pre-50_)
+      if: inputs.add_susfs
+      working-directory: ${{ env.KERNEL_COMMON }}
+      run: |
+        if [ -n "$FIX_PATCHES_DIR" ]; then
+          FIX_DIR="$GITHUB_WORKSPACE/$VERSION_DIR/samsung-fixes/$FIX_PATCHES_DIR"
+          bash "$OEM_HELPERS/apply-samsung-fixes.sh" "$DEVICE_KEY" "$KERNEL_COMMON" "$FIX_DIR"
+        fi
+
     - name: Apply Upstream SUSFS Patch
       if: inputs.add_susfs
       working-directory: ${{ env.KERNEL_COMMON }}
@@ -276,15 +285,6 @@ jobs:
       working-directory: ${{ env.KERNEL_COMMON }}
       run: |
         patch -p1 -F3 --no-backup-if-mismatch < "$GITHUB_WORKSPACE/$VERSION_DIR/KernelSU-Next/patches/51_enhanced_susfs-${GKI_TAG}.patch"
-
-    - name: Apply Samsung Fix Patches
-      if: inputs.add_susfs
-      working-directory: ${{ env.KERNEL_COMMON }}
-      run: |
-        if [ -n "$FIX_PATCHES_DIR" ]; then
-          FIX_DIR="$GITHUB_WORKSPACE/$VERSION_DIR/samsung-fixes/$FIX_PATCHES_DIR"
-          bash "$OEM_HELPERS/apply-samsung-fixes.sh" "$DEVICE_KEY" "$KERNEL_COMMON" "$FIX_DIR"
-        fi
 
     - name: Apply KSU Safety Patch
       if: inputs.add_susfs

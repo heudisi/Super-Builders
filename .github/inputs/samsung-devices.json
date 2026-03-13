@@ -16,8 +16,7 @@
     "fix_patches_dir": "SM-S938B",
     "wifi_fix": true,
     "extra_artifacts": [],
-    "disabled": true,
-    "disabled_reason": "50_ rejects on fs/namespace.c — Samsung PROC_STLOG block shifts context. Needs samsung-fix patch."
+    "disabled": false
   },
   "samsung_s25_ultra_oneui8": {
     "brand": "samsung",

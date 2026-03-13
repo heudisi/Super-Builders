@@ -1,0 +1,16 @@
+--- a/fs/namespace.c
++++ b/fs/namespace.c
+@@ -38,10 +38,9 @@
+ #include "pnode.h"
+ #include "internal.h"
+ #include <trace/hooks/blk.h>
+-
+-#ifdef CONFIG_PROC_STLOG
+-#include <linux/fslog.h>
+-#endif
+ #include <trace/hooks/fs.h>
++#ifdef CONFIG_PROC_STLOG
++#include <linux/fslog.h>
++#endif
+ 
+ /* Maximum number of mounts in a mount namespace */
