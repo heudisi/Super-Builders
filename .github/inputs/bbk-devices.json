@@ -243,7 +243,7 @@
     "name": "OnePlus 12",
     "soc": "sm8650",
     "codename": "pineapple",
-    "android_version": "android16",
+    "android_version": "android14",
     "kernel_version": "6.1",
     "build_method": "perf",
     "manifest_repo": "OnePlusOSS/kernel_manifest",
