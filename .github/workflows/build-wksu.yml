@@ -186,6 +186,16 @@ jobs:
           echo "Pinned WKSU to $(git rev-parse --short=7 HEAD)"
         fi
 
+        cd "$KERNEL_ROOT/common"
+
+        SUPERCALLS="drivers/kernelsu/supercalls.c"
+        if [ -f "$SUPERCALLS" ]; then
+          sed -i '/ksu_mark_running_process/d' "$SUPERCALLS"
+          if grep -q "vzalloc" "$SUPERCALLS" && ! head -5 "$SUPERCALLS" | grep -q "vmalloc.h"; then
+            sed -i '1a #include <linux/vmalloc.h>' "$SUPERCALLS"
+          fi
+        fi
+
     - name: Fix Old Kernel Compatibility
       working-directory: ${{ env.KERNEL_ROOT }}/common
       run: |

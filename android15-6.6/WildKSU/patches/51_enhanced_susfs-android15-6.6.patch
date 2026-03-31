@@ -195,22 +195,7 @@
 +#endif
  	if (flags & ~(RENAME_NOREPLACE | RENAME_EXCHANGE | RENAME_WHITEOUT))
  		goto put_names;
- 
-@@ -5318,6 +5362,9 @@
-  */
- int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen)
- {
-+		if (d_in_lookup(dentry)) {
-+			d_lookup_done(dentry);
-+		}
- 	struct inode *inode = d_inode(dentry);
- 	DEFINE_DELAYED_CALL(done);
- 	const char *link;
-@@ -5472,3 +5519,4 @@
- 	.get_link	= page_get_link,
- };
- EXPORT_SYMBOL(page_symlink_inode_operations);
-+	struct inode *inode;
+
 --- a/fs/namespace.c	2026-03-07 19:05:40.823358948 +0100
 +++ b/fs/namespace.c	2026-03-08 03:37:07.249625192 +0100
 @@ -45,8 +45,6 @@
