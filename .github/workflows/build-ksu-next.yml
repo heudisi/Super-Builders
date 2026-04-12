@@ -190,7 +190,6 @@ jobs:
 
         SUPERCALLS="drivers/kernelsu/supercalls.c"
         if [ -f "$SUPERCALLS" ]; then
-          sed -i '/ksu_mark_running_process/d' "$SUPERCALLS"
           if grep -q "vzalloc" "$SUPERCALLS" && ! head -5 "$SUPERCALLS" | grep -q "vmalloc.h"; then
             sed -i '1a #include <linux/vmalloc.h>' "$SUPERCALLS"
           fi
@@ -219,7 +218,11 @@ jobs:
       working-directory: ${{ env.KERNEL_ROOT }}/${{ env.KSU_DIR }}
       run: |
         PATCH="$GITHUB_WORKSPACE/$VERSION_DIR/KernelSU-Next/patches/70_ksu_safety-kernelsu-next-${KERNEL_VER}.patch"
-        [ -s "$PATCH" ] && patch -p1 --no-backup-if-mismatch < "$PATCH" || echo "No 70_ patch needed"
+        if [ -s "$PATCH" ]; then
+          patch -p1 --no-backup-if-mismatch < "$PATCH"
+        else
+          echo "No 70_ patch needed"
+        fi
 
     - name: Apply ZeroMount Patch
       if: inputs.add_zeromount && inputs.add_susfs
@@ -355,7 +358,7 @@ jobs:
 
         if [ -z "$DEVICE_CODENAME" ]; then
           DEVICE_CODENAME=$(jq -r --arg kv "$KERNEL_VER" --arg sl "$SUBLEVEL" \
-            '[.devices | to_entries[] | select(.value.kernel_version == $kv and .value.sub_level == $sl) | .key] | first // empty' \
+            '[.devices | to_entries[] | select(.key | startswith("_") | not) | select(.value.kernel_version == $kv and .value.sub_level == $sl) | .key] | first // empty' \
             "$PROFILE_FILE")
         fi
 
@@ -370,11 +373,21 @@ jobs:
         STOCK_BUILD_HOST=$(jq -r ".devices.${DEVICE_CODENAME}.stock_kernel.build_host" "$PROFILE_FILE")
         STOCK_COMPILER=$(jq -r ".devices.${DEVICE_CODENAME}.stock_kernel.compiler_info // empty" "$PROFILE_FILE")
 
+        # 5.10–6.1: Makefile prepends KERNELVERSION, setlocalversion outputs suffix only
+        # 6.6+: Makefile delegates entirely to setlocalversion, must output full version
+        MAJOR=${KERNEL_VER%%.*}
+        MINOR=${KERNEL_VER#*.}
+        if [ "$MAJOR" -gt 6 ] || { [ "$MAJOR" -eq 6 ] && [ "$MINOR" -ge 6 ]; }; then
+          RELEASE_OUTPUT="${KERNEL_VER}.${SUBLEVEL}${STOCK_RELEASE}"
+        else
+          RELEASE_OUTPUT="$STOCK_RELEASE"
+        fi
+
         cat > scripts/setlocalversion << 'SETLOCAL_EOF'
         #!/bin/sh
-        printf '%s' "STOCK_RELEASE_PLACEHOLDER"
+        printf '%s' "RELEASE_OUTPUT_PLACEHOLDER"
         SETLOCAL_EOF
-        sed -i "s|STOCK_RELEASE_PLACEHOLDER|${STOCK_RELEASE}|g" scripts/setlocalversion
+        sed -i "s|RELEASE_OUTPUT_PLACEHOLDER|${RELEASE_OUTPUT}|g" scripts/setlocalversion
         chmod +x scripts/setlocalversion
 
         if [ -f "scripts/mkcompile_h" ]; then

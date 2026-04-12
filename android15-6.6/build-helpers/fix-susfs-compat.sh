@@ -162,5 +162,59 @@ else
     echo "fix-susfs-compat: setuid_hook.c not found — skipping"
 fi
 
+# ---------------------------------------------------------------------------
+# Fix 7: task_mmu.c — pagemap_read vma scoping on older sublevels
+# The 50_ patch places '#ifdef SUS_MAP / struct vm_area_struct *vma; /
+# #endif' inside a nested block on older sublevels due to patch fuzz.
+# Remove the misplaced 3-line block and insert the declaration at
+# function scope after 'struct pagemapread pm;' (stable anchor present
+# in all sublevels of pagemap_read).
+# ---------------------------------------------------------------------------
+if [ -f "$TMU" ]; then
+    if grep -B1 'struct vm_area_struct \*vma;' "$TMU" | grep -q 'CONFIG_KSU_SUSFS_SUS_MAP'; then
+        echo "fix-susfs-compat: relocating pagemap_read vma to function scope in task_mmu.c"
+        python3 - "$TMU" << 'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path) as f:
+    lines = f.readlines()
+
+# Step 1: Remove the #ifdef-wrapped vma declaration (unique to pagemap_read)
+removed = False
+i = 0
+while i < len(lines):
+    if 'CONFIG_KSU_SUSFS_SUS_MAP' in lines[i] \
+       and i+1 < len(lines) and 'struct vm_area_struct *vma;' in lines[i+1] \
+       and i+2 < len(lines) and '#endif' in lines[i+2]:
+        del lines[i:i+3]
+        print(f"  removed #ifdef-wrapped vma block at line {i+1}")
+        removed = True
+        break
+    i += 1
+
+if not removed:
+    print("  no #ifdef-wrapped vma found, skipping")
+    sys.exit(0)
+
+# Step 2: Insert vma decl after 'struct pagemapread pm;' in pagemap_read
+inserted = False
+for i, line in enumerate(lines):
+    if 'struct pagemapread pm;' in line:
+        lines.insert(i+1, '\tstruct vm_area_struct *vma;\n')
+        print(f"  inserted vma decl after pagemapread pm (line {i+2})")
+        inserted = True
+        break
+
+if not inserted:
+    print("  ERROR: pagemapread pm anchor not found")
+    sys.exit(1)
+
+with open(path, 'w') as f:
+    f.writelines(lines)
+PYEOF
+    fi
+fi
+
+
 echo "fix-susfs-compat: done"
 exit 0

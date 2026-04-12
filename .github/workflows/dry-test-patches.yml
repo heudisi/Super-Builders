@@ -346,34 +346,28 @@ jobs:
         HELPERS="$GITHUB_WORKSPACE/$VERSION_DIR/build-helpers"
         bash "$HELPERS/clean-build-flags.sh" . "$KERNEL_VER" "$KSU_VARIANT"
 
-    - name: Compile Patched Files
+    - name: Compile Full Kernel
       working-directory: ${{ env.KERNEL_ROOT }}
       run: |
         cd common
 
-        CHANGED_C=$(git diff --name-only "$PRE_PATCH_SHA" HEAD -- '*.c' || true)
-        NEW_C=$(git ls-files --others --exclude-standard -- '*.c' || true)
-        ALL_C=$(echo -e "${CHANGED_C}\n${NEW_C}" | sort -u | grep '\.c$' || true)
-
-        if [ -z "$ALL_C" ]; then
-          echo "No .c files changed by patches, skipping compile check"
-          echo "COMPILE_STATUS=skipped (no .c changes)" >> "$GITHUB_ENV"
-          exit 0
-        fi
-
-        FILE_COUNT=$(echo "$ALL_C" | wc -l)
-        OBJ_TARGETS=$(echo "$ALL_C" | sed 's/\.c$/.o/' | tr '\n' ' ')
-        echo "::group::Compile targets ($FILE_COUNT files)"
-        echo "$ALL_C"
-        echo "::endgroup::"
-
         export ROOT_DIR="$KERNEL_ROOT"
         export KERNEL_DIR=common
 
-        CLANG_BIN=$(grep '^CLANG_PREBUILT_BIN=' build.config.common | cut -d= -f2)
-        TOOLS_BIN=$(grep '^BUILDTOOLS_PREBUILT_BIN=' build.config.common | cut -d= -f2)
-        GAS_BIN=$(grep '^LINUX_GCC_CROSS_COMPILE_PREBUILTS_BIN=' build.config.aarch64 | cut -d= -f2)
+        # build.config.common references ${CLANG_VERSION} from build.config.constants,
+        # so source constants first to make the variable available for expansion.
+        # shellcheck disable=SC1091
+        source ./build.config.constants
+
+        eval CLANG_BIN="$(grep '^CLANG_PREBUILT_BIN=' build.config.common | cut -d= -f2)"
+        eval TOOLS_BIN="$(grep '^BUILDTOOLS_PREBUILT_BIN=' build.config.common | cut -d= -f2)"
+        eval GAS_BIN="$(grep '^LINUX_GCC_CROSS_COMPILE_PREBUILTS_BIN=' build.config.aarch64 | cut -d= -f2)"
         export PATH="$ROOT_DIR/$CLANG_BIN:$ROOT_DIR/$TOOLS_BIN:$ROOT_DIR/$GAS_BIN:$PATH"
+
+        if [ ! -x "$ROOT_DIR/$CLANG_BIN/clang" ]; then
+          echo "::error::CLANG_BIN not found at $ROOT_DIR/$CLANG_BIN (CLANG_VERSION=$CLANG_VERSION)"
+          exit 1
+        fi
 
         if ! command -v ld.lld &>/dev/null; then
           sudo apt-get install -y -qq lld >/dev/null 2>&1
@@ -383,46 +377,19 @@ jobs:
         MAKE="make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- O=../out"
 
         echo "::group::make gki_defconfig"
-        $MAKE gki_defconfig -j$(nproc) 2>&1
+        $MAKE gki_defconfig -j$(nproc)
         echo "::endgroup::"
 
-        ERRORS_DIR="$(mktemp -d)"
-        COMPILE_FAIL=""
-        PASS_COUNT=0
-
-        for obj in $OBJ_TARGETS; do
-          echo "::group::$obj"
-          if $MAKE "$obj" -j1 V=1 2>&1 | tee "$ERRORS_DIR/$(basename "$obj").log"; then
-            echo "::endgroup::"
-            PASS_COUNT=$((PASS_COUNT + 1))
-          else
-            echo "::endgroup::"
-            echo "::error file=${obj%.o}.c::Compile FAILED: $obj"
-            COMPILE_FAIL="${COMPILE_FAIL}${obj}\n"
-          fi
-        done
-
-        echo ""
-        echo "========================================"
-        echo "  COMPILE RESULTS: $PASS_COUNT/$FILE_COUNT passed"
-        echo "========================================"
-
-        if [ -n "$COMPILE_FAIL" ]; then
-          echo ""
-          echo "FAILED FILES:"
-          echo -e "$COMPILE_FAIL" | while read -r f; do
-            [ -z "$f" ] && continue
-            echo "  ✗ $f"
-            echo "  --- error output ---"
-            cat "$ERRORS_DIR/$(basename "$f").log" | grep -E 'error:|warning:|undefined|undeclared|unterminated|redefinition|incompatible|implicit' | head -20
-            echo "  ---"
-          done
-          echo ""
-          echo "COMPILE_STATUS=FAILED ($PASS_COUNT/$FILE_COUNT)" >> "$GITHUB_ENV"
+        echo "::group::make Image modules"
+        if $MAKE -j$(nproc) Image modules; then
+          echo "::endgroup::"
+          echo "COMPILE_STATUS=passed (full build)" >> "$GITHUB_ENV"
+        else
+          echo "::endgroup::"
+          echo "::error::Full kernel compile FAILED"
+          echo "COMPILE_STATUS=FAILED" >> "$GITHUB_ENV"
           exit 1
         fi
-
-        echo "COMPILE_STATUS=passed ($FILE_COUNT files)" >> "$GITHUB_ENV"
 
     - name: Upload Rejects
       if: always() && env.REJ_COUNT > 0
